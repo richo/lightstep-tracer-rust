@@ -1,7 +1,9 @@
+mod span;
+pub use span::Span;
+
+mod tracer;
+pub use tracer::Tracer;
+
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
 }

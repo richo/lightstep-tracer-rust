@@ -26,13 +26,18 @@ use quote::quote;
 use quote::ToTokens;
 
 fn prologue() -> Stmt {
-    parse(quote!{ println!("Entered autoinstrumentation"); }.into())
+    parse(quote!{
+        let __lightstep_tracing_span = lightstep_tracer_context.start_span();
+    }.into())
         .expect("Couldn't parse instrumentation entry")
 
 }
 
 fn epilogue() -> Stmt {
-    parse(quote!{ println!("Exited autoinstrumentation"); }.into())
+    parse(quote!{
+        ();
+        // Do we want to manually send the span or let drop deal with it?
+    }.into())
         .expect("Couldn't parse instrumentation exit")
 }
 

@@ -27,6 +27,18 @@ impl LightstepTracing for LightstepTracerContext {
 #[lightstep_macros::traced]
 fn traced() {
     println!("work");
+    let haha = "haha";
+    traced_inner(haha);
+    untraced_inner("ahahaa");
+}
+
+#[lightstep_macros::traced]
+fn traced_inner(asdf: &'static str) {
+    println!("inner workings: {}", asdf);
+}
+
+fn untraced_inner(other: &'static str) {
+    println!("untraced inner workings: {}", other);
 }
 
 #[lightstep_macros::traced]

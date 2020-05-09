@@ -2,12 +2,14 @@ extern crate proc_macro;
 use proc_macro::TokenStream as TokenStream1;
 
 use syn::{self, parse_macro_input,
-    Stmt,
+    Attribute, AttrStyle,
     Ident,
+    Expr, ExprCall, ExprPath,
     FnArg,
     Pat, PatType, PatIdent,
     Path, PathSegment, PathArguments,
     punctuated::Punctuated,
+    Stmt,
     Type, TypePath,
     token,
 };
@@ -24,6 +26,45 @@ use syn::{
 
 use quote::quote;
 use quote::ToTokens;
+
+use lazy_static::lazy_static;
+
+use std::sync::Mutex;
+use std::collections::HashSet;
+type FuncDef = ();
+lazy_static! {
+    static ref TRACED_FUNCS: Mutex<HashSet<FuncDef>> = Mutex::new(HashSet::new());
+}
+
+static CONTEXT_NAME: &'static str = "lightstep_tracer_context";
+fn context_expr() -> ExprPath {
+    let mut path = Punctuated::new();
+    path.push(PathSegment {
+        ident: Ident::new(CONTEXT_NAME, Span::call_site()),
+        arguments: PathArguments::None,
+    });
+    ExprPath {
+        attrs: vec![],
+        qself: None,
+        path: Path {
+            leading_colon: None,
+            segments: path,
+        },
+
+    }
+}
+
+fn is_traced(f: &ExprCall) -> bool {
+    println!("{}", f.attrs.len());
+    f.attrs.iter().any(|attr| {
+        attr.path.segments.last()
+            .map(|segment| {
+                println!("Segment: {}", &segment.ident);
+                segment.ident == "traced"
+            })
+            .unwrap_or(false)
+    })
+}
 
 fn prologue() -> Stmt {
     parse(quote!{
@@ -53,7 +94,7 @@ fn ctx_arg() -> FnArg {
             attrs: vec![],
             by_ref: None,
             mutability: None,
-            ident: Ident::new("lightstep_tracer_context", Span::call_site()),
+            ident: Ident::new(CONTEXT_NAME, Span::call_site()),
             subpat: None,
         })),
         colon_token: Token!(:)([Span::call_site()]),
@@ -75,6 +116,19 @@ pub fn traced(_attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
     let exit: Stmt = epilogue();
 
     input.sig.inputs.push(ctx_arg());
+
+    for stmt in (*input.block).stmts.iter_mut() {
+        match stmt {
+            Stmt::Expr(Expr::Call(ref mut call)) |
+            Stmt::Semi(Expr::Call(ref mut call), _) => {
+                dbg!(is_traced(call));
+                if is_traced(call) {
+                    call.args.push(Expr::Path(context_expr()))
+                }
+            },
+            _ => {},
+        }
+    }
 
     (*input.block).stmts.push(exit);
     (*input.block).stmts.insert(0, entry);
